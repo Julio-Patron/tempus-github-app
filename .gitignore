@@ -1,9 +1,57 @@
-# Byte-compiled / optimized / DLL files
+# =====================================================================
+# Secrets, Keys, and Private Credentials - NEVER COMMIT
+# =====================================================================
+*.pem
+*.key
+*.priv
+*.pkcs8
+*.p12
+*.pfx
+*.crt
+*.cert
+*.keys.json
+*_keys.json
+keys.json
+agent_wallet.json
+server_secret.key
+credentials*.json
+*.secrets.json
+*.token
+id_rsa*
+id_ed25519*
+
+# Environment and configuration files
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+
+# Local operator deployment (identities, configuration, and audit state)
+.local/
+/data/
+data/
+
+# =====================================================================
+# Local Databases and Runtime State
+# =====================================================================
+*.db
+*.db-*
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.wal
+*.shm
+*.journal
+
+# =====================================================================
+# Python Bytecode, Virtual Environments, and Packaging
+# =====================================================================
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -21,39 +69,69 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.whl
+*.tar.gz
+
+# Preserve manifest directory
 !manifest/
 !manifest/**
 
-# Virtual environments
-.env
-.venv
+# Virtual Environments
+.venv/
+.venv*/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
 
-# Testing & Linting
+# =====================================================================
+# Testing, Coverage, and Linting
+# =====================================================================
 .pytest_cache/
+pytest-cache-files-*/
 .coverage
+.coverage.*
 htmlcov/
+coverage.xml
 .tox/
 .nox/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
 
-# Databases and runtime state
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
+# =====================================================================
+# Temporary Files, Logs, and Backups
+# =====================================================================
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*~
+.cache/
+/tmp/
+/temp/
+/scratch/
+.scratch/
 
-# Keys and secrets - NEVER COMMIT
-*.pem
-*.key
-*.keys.json
-.env.local
-.env.*.local
-
-# Local operator deployment (identities, configuration, and audit state)
-.local/
+# =====================================================================
+# IDEs, AI Assistants, and Operating System Artifacts
+# =====================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+desktop.ini
+.claude/
+.agents/
+.cursor/
+.windsurf/
+.zed/
+.idea/
+.vscode/
+.vs/
+*.code-workspace
+*.suo
+*.user
