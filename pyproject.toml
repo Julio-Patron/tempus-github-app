@@ -34,7 +34,7 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "tempus-ddb @ git+https://github.com/elbuilder77/tempus-ddb.git@95e792be4dda22bf65963896a81191d0d0cef094",
+    "tempus-ddb>=0.5.2",
     "cryptography>=42.0.0",
     "pyjwt>=2.8.0",
 ]
