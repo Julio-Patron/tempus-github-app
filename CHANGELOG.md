@@ -13,11 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pull request merges with mandatory 40-character HEAD SHA, explicit merge method, repository-scoped `contents: write` tokens, and confirmation of boolean `merged: true`.
 - Per-execution permit context and bounded GitHub rate-limit retries with read-only Gate revocation checks, complete server-required waits, and no retries after ambiguous results.
 - Merge setup guidance for accepting new installation permissions and configuring tenant approval policy.
+- Lightweight multi-purpose production `Dockerfile` (<150 MB, base `python:3.12-slim`) with unprivileged `tempus` user.
+- In-memory and base64 private key loading via `GITHUB_APP_PRIVATE_KEY_BASE64` and `--app-private-key-base64` CLI flag.
+- Hardened `.gitignore` enforcing absolute exclusion of secrets, keys, local SQLite databases, and runtime state.
+
+### Changed
+
+- Updated `pyproject.toml` dependency to consume official `tempus-ddb>=0.5.2` package.
 
 ### Fixed
 
-- Pin the compatible Tempus runtime source and configure Rust in CI; PyPI 0.5.1 does not support the required `gate_db` constructor argument.
-- Reject configured `gate_db` when the underlying runtime cannot support revocation verification.
 - Classify unmergeable PRs (405) and changed HEAD commits (409) as deterministic failures.
 - Suppress arbitrary transport error messages from signed outcomes.
 
