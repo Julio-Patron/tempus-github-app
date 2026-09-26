@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `github.push_branch`: publish an agent's git bundle to one branch under an exact-SHA permit. The permit binds the bundle sha256, `tip_sha`, `base_sha` and every changed path; the executor re-derives them, then creates or fast-forwards only branches under a namespace (`--push-branch-prefix`, default `agent/`) with a lease-guarded push. Git runs isolated from operator configuration, HTTPS-only, with the token in a repository-scoped header. New CLI options `--bundle` / `TEMPUS_BUNDLE` and `--push-branch-prefix` / `TEMPUS_PUSH_BRANCH_PREFIX`; the Docker image now includes `git`.
 - Thread comments, issue/PR labels, and review requests with strict input validation and sanitized outcomes.
 - Pull request merges with mandatory 40-character HEAD SHA, explicit merge method, repository-scoped `contents: write` tokens, and confirmation of boolean `merged: true`.
 - Per-execution permit context and bounded GitHub rate-limit retries with read-only Gate revocation checks, complete server-required waits, and no retries after ambiguous results.

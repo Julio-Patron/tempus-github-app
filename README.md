@@ -159,6 +159,7 @@ Unknown input fields are rejected before requesting installation credentials.
 | `github.add_labels` | Positive integer `issue_number`, non-empty list of non-empty `labels` | `issues: write` |
 | `github.request_review` | Positive integer `pull_number`, at least one non-empty list of `reviewers` or `team_reviewers` | `pull_requests: write` |
 | `github.merge_pull_request` | Positive integer `pull_number`, 40-character hexadecimal HEAD `sha`, explicit `merge_method` (`merge`, `squash`, `rebase`) | `contents: write` |
+| `github.push_branch` | `branch` under the push namespace (default `agent/`), lowercase 40-hex `base_sha` and `tip_sha`, boolean `new_branch`, `bundle_sha256` of the git bundle, sorted unique `paths` (at most 1,000) | `contents: write` |
 
 Comments are conversation-thread comments on issues or pull requests. Review
 requests accept user logins and team slugs. Label outcomes include only label
@@ -171,6 +172,41 @@ when GitHub explicitly returns boolean `merged: true`. Existing Apps must add
 Configure Gate policy to restrict merges to integration/release-manager identities
 and require human approval for protected branches before issuing permits; this
 executor does not configure that governance. See [merge setup](docs/SETUP.md#6-enable-governed-pull-request-merges).
+
+#### Publishing an agent's commits (`github.push_branch`)
+
+Agents commit locally and never hold a write credential. To publish, the agent's
+side creates a git bundle from a **branch ref** (git refuses a bare SHA):
+
+```bash
+git bundle create agent.bundle <base_sha>..agent/fix-123
+```
+
+The signed intent binds the bundle's `sha256`, the exact `tip_sha`, the `base_sha`
+and the list of changed `paths`. Before its single write, the executor:
+
+1. rejects a bundle whose sha256 differs from the permit, before minting a token;
+2. fetches only `base_sha` from GitHub (`--depth=1`), verifies and unbundles;
+3. requires `tip_sha` to be a head of the bundle and a descendant of `base_sha`;
+4. recomputes every path touched by the pushed commits (including changes a later
+   commit reverts and files brought in by merges) and requires an exact match with `paths`;
+5. pushes `tip_sha` to `refs/heads/<branch>` with `--force-with-lease`, pinned to
+   "absent" when `new_branch` is true or to `base_sha` otherwise, so the update is a
+   creation or a fast-forward from the signed state and nothing else.
+
+Branches outside the push namespace (`--push-branch-prefix`, default `agent/`) are
+rejected before credentials are requested, so `main` can never be pushed even if the
+Gate policy is misconfigured. Git runs with no system/global configuration, hooks,
+credential helpers or prompts, HTTPS only and redirects disabled; the installation token
+travels only in an `http.<remote>.extraheader` setting scoped to the repository URL,
+never in arguments or URLs. A push that times out or ends without a status line for the
+branch is `UNKNOWN` and is never retried; failures before any upload (DNS, connection,
+HTTP 4xx) are `FAILED`. The executor image must include `git` (the provided
+`Dockerfile` installs it).
+
+```bash
+tempus-github-app-executor --permit permit.json --bundle agent.bundle
+```
 
 * **Zero Credential & Information Leakage**: The agent never receives GitHub tokens. The executor process handles authentication internally, and the webhook server sanitizes error responses to prevent internal detail disclosure.
 * **Scope Minimization**: Tokens are generated on-demand with minimal repository and permission scope (`issues: write`, `pull_requests: write`, or `contents: write` for merges).

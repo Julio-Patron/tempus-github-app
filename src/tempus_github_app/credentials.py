@@ -36,6 +36,7 @@ class GitHubAppCredentials:
         "github.add_labels": "issues",
         "github.request_review": "pull_requests",
         "github.merge_pull_request": "contents",
+        "github.push_branch": "contents",
     }
 
     def __init__(

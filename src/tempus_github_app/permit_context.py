@@ -7,6 +7,7 @@ consumption. No mutable context is stored on the shared action adapter.
 import json
 import sqlite3
 import time
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 from typing import Any
@@ -50,15 +51,30 @@ def verified_permit_context(permit_json: str, gate_db: str | None) -> PermitCont
 
 
 class PermitBoundActionAdapter:
-    """Bind one immutable permit to one invocation of ExecutorRuntime."""
+    """Bind one immutable permit (and its artifacts) to one invocation of ExecutorRuntime.
 
-    def __init__(self, adapter: Any, permit_json: str, gate_db: str | None):
+    Artifacts such as a git bundle are untrusted until the adapter matches them
+    against digests inside the signed intent.
+    """
+
+    def __init__(
+        self,
+        adapter: Any,
+        permit_json: str,
+        gate_db: str | None,
+        artifacts: Mapping[str, Any] | None = None,
+    ):
         self._adapter = adapter
         self._permit_json = permit_json
         self._gate_db = gate_db
+        self._artifacts = dict(artifacts or {})
         self.supported_actions = adapter.supported_actions
         self.unsupported_error_code = adapter.unsupported_error_code
 
     def execute_action(self, intent: dict[str, Any]):
         context = verified_permit_context(self._permit_json, self._gate_db)
+        if self._artifacts:
+            return self._adapter.execute_action(
+                intent, context=context, artifacts=self._artifacts
+            )
         return self._adapter.execute_action(intent, context=context)

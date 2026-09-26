@@ -93,6 +93,7 @@ def test_redirects_cannot_forward_credentials():
     ("github.add_labels", "issues"),
     ("github.request_review", "pull_requests"),
     ("github.merge_pull_request", "contents"),
+    ("github.push_branch", "contents"),
 ])
 def test_new_action_token_scope(app_key, action, permission):
     now = [time.time()]
