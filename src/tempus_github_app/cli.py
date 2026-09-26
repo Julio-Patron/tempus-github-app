@@ -13,6 +13,7 @@ from tempus_ddb.executor_runtime import UnknownExecutionError
 from . import __version__
 from .credentials import GitHubAppCredentials
 from .executor import GitHubAppExecutorAdapter
+from .git_push import DEFAULT_BRANCH_PREFIX
 
 try:
     from dotenv import load_dotenv
@@ -115,6 +116,19 @@ def main(argv: list[str] | None = None) -> None:
         default=_get_env_int("TEMPUS_EXECUTOR_POOL_SIZE", 8),
         help="Maximum pooled SQLite connections (env: TEMPUS_EXECUTOR_POOL_SIZE, default: 8)",
     )
+    parser.add_argument(
+        "--bundle",
+        default=os.environ.get("TEMPUS_BUNDLE"),
+        help="Git bundle for github.push_branch; the permit binds its sha256 (env: TEMPUS_BUNDLE)",
+    )
+    parser.add_argument(
+        "--push-branch-prefix",
+        default=os.environ.get("TEMPUS_PUSH_BRANCH_PREFIX", DEFAULT_BRANCH_PREFIX),
+        help=(
+            "Only branches under this namespace can be pushed "
+            f"(env: TEMPUS_PUSH_BRANCH_PREFIX, default: {DEFAULT_BRANCH_PREFIX})"
+        ),
+    )
 
     args = parser.parse_args(argv)
 
@@ -165,10 +179,11 @@ def main(argv: list[str] | None = None) -> None:
             api_url=args.api_url,
             executor_pool_size=args.executor_pool_size,
             gate_db=args.gate_db,
+            push_branch_prefix=args.push_branch_prefix,
         )
 
         permit_content = _read_permit(args.permit)
-        outcome = adapter.execute(permit_content)
+        outcome = adapter.execute(permit_content, bundle_path=args.bundle)
         print(outcome)
     except UnknownExecutionError as exc:
         print(exc.observation, file=sys.stderr)

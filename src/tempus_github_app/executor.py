@@ -5,6 +5,8 @@ from __future__ import annotations
 import inspect
 import re
 import time
+from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any, ClassVar
 
 from tempus_ddb.executor_runtime import (
@@ -15,6 +17,15 @@ from tempus_ddb.executor_runtime import (
 )
 
 from .credentials import GitHubAppCredentials
+from .git_push import (
+    DEFAULT_BRANCH_PREFIX,
+    PUSH_ACTION,
+    BundlePublisher,
+    GitUnavailableError,
+    github_remote_url,
+    parse_push_request,
+    validate_branch_prefix,
+)
 from .permit_context import PermitBoundActionAdapter
 from .transport import (
     RESOURCE_PATTERN,
@@ -40,6 +51,7 @@ class GitHubAppActionAdapter(ActionAdapter):
         "github.add_labels",
         "github.request_review",
         "github.merge_pull_request",
+        PUSH_ACTION,
     }
 
     def __init__(
@@ -47,18 +59,33 @@ class GitHubAppActionAdapter(ActionAdapter):
         credentials: GitHubAppCredentials,
         api_url: str = "https://api.github.com",
         transport: GitHubTransport | None = None,
+        *,
+        push_branch_prefix: str = DEFAULT_BRANCH_PREFIX,
+        publisher: BundlePublisher | None = None,
+        remote_url_for: Callable[[str], str] | None = None,
     ):
         self._credentials = credentials
         self._api_url = validate_github_api_url(api_url)
         self._transport = transport or UrllibGitHubTransport()
+        self._push_branch_prefix = validate_branch_prefix(push_branch_prefix)
+        self._publisher = publisher or BundlePublisher()
+        self._remote_url_for = remote_url_for or (
+            lambda resource: github_remote_url(self._api_url, resource)
+        )
 
     @property
     def supported_actions(self) -> set[str]:
         return self.SUPPORTED_ACTIONS
 
     def execute_action(
-        self, intent: dict[str, Any], *, context: PermitContext | None = None
+        self,
+        intent: dict[str, Any],
+        *,
+        context: PermitContext | None = None,
+        artifacts: Mapping[str, str | Path] | None = None,
     ) -> ExecutionResult:
+        if intent.get("action_type") == PUSH_ACTION:
+            return self._push_branch(intent, context, artifacts or {})
         method, url, payload, action_type, resource = self._bind_request(intent)
 
         try:
@@ -134,6 +161,53 @@ class GitHubAppActionAdapter(ActionAdapter):
             raise AmbiguousTransportError(
                 f"GITHUB_TRANSPORT_AMBIGUOUS: {type(exc).__name__}"
             ) from exc
+
+    def _push_branch(
+        self,
+        intent: dict[str, Any],
+        context: PermitContext | None,
+        artifacts: Mapping[str, str | Path],
+    ) -> ExecutionResult:
+        """Publish the permit's git bundle; the bundle travels beside the permit, bound by sha256."""
+        resource = self._required_string(intent, "resource")
+        if not RESOURCE_PATTERN.fullmatch(resource):
+            raise GitHubExecutorError("resource must be an exact 'owner/repository' value")
+        action_input = intent.get("input")
+        if not isinstance(action_input, dict):
+            raise GitHubExecutorError("intent.input must be an object")
+        request = parse_push_request(action_input, self._push_branch_prefix)
+        bundle = artifacts.get("bundle")
+        if not bundle:
+            raise GitHubExecutorError("github.push_branch requires the permit's bundle artifact")
+        if not self._publisher.bundle_matches(bundle, request.bundle_sha256):
+            return ExecutionResult(
+                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_BUNDLE_MISMATCH"}
+            )
+
+        try:
+            token = self._credentials.token_for(resource, PUSH_ACTION)
+        except Exception:  # noqa: BLE001
+            # Never leak credential details or stack trace
+            return ExecutionResult(
+                status="FAILED",
+                payload={"error_code": "TEMPUS_GITHUB_CREDENTIAL_REJECTED"},
+            )
+
+        try:
+            return self._publisher.publish(
+                request, bundle, self._remote_url_for(resource), token, context, resource
+            )
+        except GitHubPermitError:
+            return ExecutionResult(
+                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_PERMIT_INVALID"}
+            )
+        except GitUnavailableError:
+            return ExecutionResult(
+                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_GIT_UNAVAILABLE"}
+            )
+        except AmbiguousTransportError:
+            # Git output may echo remote URLs; keep the reason fixed.
+            raise AmbiguousTransportError("GITHUB_PUSH_AMBIGUOUS") from None
 
     def _bind_request(
         self, intent: dict[str, Any]
@@ -319,9 +393,18 @@ class GitHubAppExecutorAdapter:
         transport: GitHubTransport | None = None,
         executor_pool_size: int = 8,
         gate_db: str | None = None,
+        *,
+        push_branch_prefix: str = DEFAULT_BRANCH_PREFIX,
+        publisher: BundlePublisher | None = None,
+        remote_url_for: Callable[[str], str] | None = None,
     ):
         self._adapter = GitHubAppActionAdapter(
-            credentials=credentials, api_url=api_url, transport=transport
+            credentials=credentials,
+            api_url=api_url,
+            transport=transport,
+            push_branch_prefix=push_branch_prefix,
+            publisher=publisher,
+            remote_url_for=remote_url_for,
         )
         runtime_kwargs: dict[str, Any] = {
             "executor_db": executor_db,
@@ -340,10 +423,15 @@ class GitHubAppExecutorAdapter:
         self._runtime = ExecutorRuntime(**runtime_kwargs)
         self._gate_db = gate_db
 
-    def execute(self, permit_json: str) -> str:
-        """Consume a permit, perform exactly its GitHub action, and sign the outcome."""
+    def execute(self, permit_json: str, *, bundle_path: str | Path | None = None) -> str:
+        """Consume a permit, perform exactly its GitHub action, and sign the outcome.
+
+        ``bundle_path`` is required for github.push_branch; the permit binds its sha256.
+        """
+        artifacts = {"bundle": bundle_path} if bundle_path else None
         return self._runtime.execute_permit(
-            permit_json, PermitBoundActionAdapter(self._adapter, permit_json, self._gate_db)
+            permit_json,
+            PermitBoundActionAdapter(self._adapter, permit_json, self._gate_db, artifacts),
         )
 
     execute_permit = execute
