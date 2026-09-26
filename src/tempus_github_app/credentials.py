@@ -1,5 +1,7 @@
 """GitHub App credentials isolated inside a single-tenant mediated executor."""
 
+import base64
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -39,10 +41,11 @@ class GitHubAppCredentials:
     def __init__(
         self,
         client_id: str,
-        private_key_path: str,
-        installation_id: int,
-        repository: str,
+        private_key_path: str | None = None,
+        installation_id: int = 0,
+        repository: str = "",
         *,
+        private_key_pem: bytes | str | None = None,
         api_url: str = "https://api.github.com",
         transport: GitHubTransport | None = None,
         clock: Callable[[], float] = time.time,
@@ -59,7 +62,25 @@ class GitHubAppCredentials:
             raise GitHubExecutorError("GitHub App repository must be owner/repository")
 
         try:
-            key_bytes = Path(private_key_path).read_bytes()
+            if private_key_pem is not None:
+                if isinstance(private_key_pem, str):
+                    pem_str = private_key_pem.strip()
+                    if pem_str.startswith("-----BEGIN"):
+                        key_bytes = pem_str.encode("utf-8")
+                    else:
+                        key_bytes = base64.b64decode(pem_str)
+                else:
+                    key_bytes = bytes(private_key_pem)
+            elif private_key_path is not None and str(private_key_path).strip():
+                key_bytes = Path(private_key_path).read_bytes()
+            elif os.environ.get("GITHUB_APP_PRIVATE_KEY_BASE64"):
+                key_bytes = base64.b64decode(os.environ["GITHUB_APP_PRIVATE_KEY_BASE64"].strip())
+            elif os.environ.get("GITHUB_APP_PRIVATE_KEY"):
+                val = os.environ["GITHUB_APP_PRIVATE_KEY"].strip()
+                key_bytes = val.encode("utf-8") if val.startswith("-----BEGIN") else base64.b64decode(val)
+            else:
+                raise ValueError("No private key provided")
+
             key = serialization.load_pem_private_key(key_bytes, password=None)
             if not isinstance(key, RSAPrivateKey) or key.key_size < 2048:
                 raise ValueError("RSA key required with at least 2048 bits")

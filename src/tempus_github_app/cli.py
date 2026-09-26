@@ -89,6 +89,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Path to GitHub App RSA private key .pem (env: GITHUB_APP_PRIVATE_KEY_PATH)",
     )
     parser.add_argument(
+        "--app-private-key-base64",
+        default=os.environ.get("GITHUB_APP_PRIVATE_KEY_BASE64"),
+        help="Base64-encoded GitHub App RSA private key .pem (env: GITHUB_APP_PRIVATE_KEY_BASE64)",
+    )
+    parser.add_argument(
         "--installation-id",
         type=int,
         default=_get_env_int("GITHUB_APP_INSTALLATION_ID"),
@@ -127,8 +132,8 @@ def main(argv: list[str] | None = None) -> None:
         missing.append("--tenant-id (or TEMPUS_TENANT_ID)")
     if not args.app_client_id:
         missing.append("--app-client-id (or GITHUB_APP_CLIENT_ID)")
-    if not args.app_private_key:
-        missing.append("--app-private-key (or GITHUB_APP_PRIVATE_KEY_PATH)")
+    if not args.app_private_key and not args.app_private_key_base64:
+        missing.append("--app-private-key (or GITHUB_APP_PRIVATE_KEY_PATH / GITHUB_APP_PRIVATE_KEY_BASE64)")
     if args.installation_id is None:
         missing.append("--installation-id (or GITHUB_APP_INSTALLATION_ID)")
     if not args.repository:
@@ -145,6 +150,7 @@ def main(argv: list[str] | None = None) -> None:
         credentials = GitHubAppCredentials(
             client_id=args.app_client_id,
             private_key_path=args.app_private_key,
+            private_key_pem=args.app_private_key_base64,
             installation_id=args.installation_id,
             repository=args.repository,
             api_url=args.api_url,

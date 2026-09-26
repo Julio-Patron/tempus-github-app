@@ -102,3 +102,47 @@ def test_new_action_token_scope(app_key, action, permission):
     assert transport.calls[0][3] == {
         "repositories": ["widget"], "permissions": {permission: "write"},
     }
+
+
+def test_credentials_from_pem_string_and_base64(app_key, monkeypatch):
+    import base64
+    from pathlib import Path
+
+    pem_bytes = Path(app_key[0]).read_bytes()
+    b64_str = base64.b64encode(pem_bytes).decode("ascii")
+    now = [time.time()]
+    transport = MockAppTransport(now)
+
+    # 1. From PEM string
+    creds_pem = GitHubAppCredentials(
+        client_id="Iv1.test",
+        installation_id=42,
+        repository="acme/widget",
+        private_key_pem=pem_bytes.decode("utf-8"),
+        transport=transport,
+        clock=lambda: now[0],
+    )
+    assert creds_pem.token_for("acme/widget", "github.create_issue") == transport.token
+
+    # 2. From base64 string in private_key_pem
+    creds_b64 = GitHubAppCredentials(
+        client_id="Iv1.test",
+        installation_id=42,
+        repository="acme/widget",
+        private_key_pem=b64_str,
+        transport=transport,
+        clock=lambda: now[0],
+    )
+    assert creds_b64.token_for("acme/widget", "github.create_issue") == transport.token
+
+    # 3. From environment variable GITHUB_APP_PRIVATE_KEY_BASE64
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_BASE64", b64_str)
+    creds_env = GitHubAppCredentials(
+        client_id="Iv1.test",
+        installation_id=42,
+        repository="acme/widget",
+        transport=transport,
+        clock=lambda: now[0],
+    )
+    assert creds_env.token_for("acme/widget", "github.create_issue") == transport.token
+
