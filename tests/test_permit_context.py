@@ -10,7 +10,7 @@ from tempus_ddb.executor_runtime import UnknownExecutionError
 from tempus_github_app.credentials import GitHubAppCredentials
 from tempus_github_app.executor import GitHubAppExecutorAdapter
 from tempus_github_app.permit_context import verified_permit_context
-from tempus_github_app.transport import UrllibGitHubTransport
+from tempus_github_app.transport import GitHubPermitError, UrllibGitHubTransport
 from tests.conftest import MockAppTransport, setup_gate_and_agents
 from tests.test_transport_resilience import http_error
 
@@ -46,6 +46,21 @@ def execution(tmp_path, app_key, monkeypatch):
         credentials=credentials, transport=transport, gate_db=env["gate_db"],
     )
     return env, permit, executor, transport, opener, response, sleeps, auth
+
+
+def authorization_of(permit: str) -> dict:
+    return json.loads(permit)["authorization"]
+
+
+def with_duplicate_authorization(permit: str) -> str:
+    """Insert a second authorization key before the signed one.
+
+    A last-key-wins parser would still see the signed object and could proceed.
+    """
+    needle = '"authorization":'
+    index = permit.find(needle)
+    assert index != -1
+    return f'{permit[:index]}"authorization":{{"expires_at":1}},{permit[index:]}'
 
 
 def revoke(env, permit, identity=False):
@@ -138,18 +153,19 @@ def test_tampered_expiry_never_reaches_context_or_credentials(execution):
 
 def test_context_uses_signed_microseconds_and_fresh_revocation(execution):
     env, permit, _, _, _, _, _, _ = execution
-    context = verified_permit_context(permit, env["gate_db"])
-    assert context.deadline == json.loads(permit)["authorization"]["expires_at"] / 1_000_000
+    authorization = authorization_of(permit)
+    context = verified_permit_context(authorization, env["gate_db"])
+    assert context.deadline == authorization["expires_at"] / 1_000_000
     assert context.check_validity() is True
     revoke(env, permit)
     assert context.check_validity() is False
-    assert verified_permit_context(permit, None).check_validity is None
+    assert verified_permit_context(authorization, None).check_validity is None
 
 
 def test_missing_db_is_not_created(execution, tmp_path):
     _, permit, _, _, _, _, _, _ = execution
     missing = tmp_path / "missing.db"
-    context = verified_permit_context(permit, str(missing))
+    context = verified_permit_context(authorization_of(permit), str(missing))
     assert context.check_validity() is False
     assert not missing.exists()
 
@@ -158,7 +174,7 @@ def test_schema_mismatch_fails_closed(execution, tmp_path):
     _, permit, _, _, _, _, _, _ = execution
     db = tmp_path / "empty.db"
     db.touch()
-    assert verified_permit_context(permit, str(db)).check_validity() is False
+    assert verified_permit_context(authorization_of(permit), str(db)).check_validity() is False
 
 
 def test_permission_denied_is_failed(execution):
@@ -209,3 +225,44 @@ def test_untrusted_custom_ambiguity_reason_is_sanitized(execution):
     assert "secret" not in str(caught.value)
     auth_id = json.loads(permit)["authorization"]["authorization_id"]
     assert "secret" not in executor.get_execution_state(auth_id)
+
+
+def test_context_does_not_parse_the_permit(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise AssertionError("permit context parsed JSON")
+
+    monkeypatch.setattr("tempus_github_app.permit_context.loads_strict", boom)
+    with pytest.raises(GitHubPermitError, match="verified authorization"):
+        verified_permit_context('{"authorization":{"expires_at":1,"authorization":2}}', None)
+    authorization = {"expires_at": 2_000_000, "authorization_id": "a", "agent_id": "b"}
+    context = verified_permit_context(authorization, None)
+    assert context.deadline == 2
+    assert context.check_validity is None
+
+
+def test_execute_uses_verified_authorization_object(execution, monkeypatch):
+    env, permit, executor, _, _, _, _, _ = execution
+    captured = {}
+    original = verified_permit_context
+
+    def spy(authorization, gate_db):
+        captured["authorization"] = authorization
+        captured["gate_db"] = gate_db
+        return original(authorization, gate_db)
+
+    monkeypatch.setattr("tempus_github_app.permit_context.verified_permit_context", spy)
+    executor.execute(permit)
+    assert captured["authorization"] == authorization_of(permit)
+    assert captured["gate_db"] == env["gate_db"]
+    assert "intent" not in captured["authorization"]
+
+
+def test_duplicate_authorization_is_rejected(execution):
+    _, permit, executor, _, opener, _, _, auth = execution
+    duplicate = with_duplicate_authorization(permit)
+    with pytest.raises(json.JSONDecodeError, match="DUPLICATE_JSON_KEY"):
+        executor.execute(duplicate)
+    assert not auth.calls
+    opener.open.assert_not_called()
+    # The signed permit was not consumed by the collapsed reading.
+    assert json.loads(executor.execute(permit))["status"] == "SUCCEEDED"

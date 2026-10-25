@@ -2,9 +2,10 @@
 
 import hashlib
 import hmac
-import json
 from collections.abc import Callable
 from typing import Any
+
+from .strict_json import loads as loads_strict
 
 
 class WebhookVerificationError(ValueError):
@@ -56,7 +57,7 @@ class GitHubWebhookHandler:
         ):
             raise WebhookVerificationError("Invalid or missing webhook signature")
 
-        payload = json.loads(payload_bytes.decode("utf-8"))
+        payload = loads_strict(payload_bytes)
         handler = self._handlers.get(event_name)
         if handler:
             return handler(event_name, payload)

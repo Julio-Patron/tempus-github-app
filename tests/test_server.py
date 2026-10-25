@@ -95,6 +95,18 @@ def test_webhook_missing_signature_rejected(client: TestClient):
     assert response.status_code == 401
 
 
+def test_webhook_duplicate_json_key_rejected(client: TestClient, test_secret: str):
+    body = b'{"action":"opened","action":"closed"}'
+    sig = _sign(test_secret, body)
+    response = client.post(
+        "/webhook",
+        content=body,
+        headers={"X-GitHub-Event": "issues", "X-Hub-Signature-256": sig},
+    )
+    assert response.status_code == 400
+    assert "DUPLICATE_JSON_KEY" in response.json()["detail"]
+
+
 def test_webhook_malformed_json_rejected(client: TestClient, test_secret: str):
     body = b"not-valid-json"
     sig = _sign(test_secret, body)
