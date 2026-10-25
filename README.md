@@ -66,11 +66,13 @@ pip install -e ".[server]"
 pip install -e ".[dev]"
 ```
 
-Requires Python 3.10+, Git, and the stable Rust toolchain to build the pinned
-`tempus-ddb` runtime. The dependency currently points to commit
-`95e792be4dda22bf65963896a81191d0d0cef094` (0.5.2 source), which supports
-`gate_db`; the published 0.5.1 runtime lacks that constructor argument.
-Keep the source pin until a compatible release is published and verified.
+Requires Python 3.10+. The supported core line is **tempus-ddb 0.5.3 or newer, below 0.6**
+(`tempus-ddb>=0.5.3,<0.6`). CI installs `tempus-ddb==0.5.3` from PyPI and also builds the
+[`desarrollo`](https://github.com/Julio-Patron/tempus-ddb/tree/desarrollo) branch from git.
+Platforms without a wheel, and that git branch, need the stable Rust toolchain.
+
+When 0.5.4 is published, raise the minimum to `tempus-ddb>=0.5.4,<0.6`. Release 0.5.3
+has a payments bypass, so it must not remain the minimum once 0.5.4 exists.
 
 ---
 

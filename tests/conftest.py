@@ -96,6 +96,10 @@ def setup_gate_and_agents(
     gen_keys(str(exec_keyfile))
 
     gate = TempusDDB(str(gate_db), str(gate_keyfile))
+    # 0.5.3 seeds an allow-all baseline. Later cores refuse actions until a policy
+    # is installed; the dev helper is the one the core publishes for tests.
+    if hasattr(gate, "install_allow_all_dev_policy"):
+        gate.install_allow_all_dev_policy()
 
     with gate_keyfile.open(encoding="utf-8") as f:
         gate_id = json.load(f)["public_key"]
