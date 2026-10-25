@@ -4,6 +4,9 @@
 Rust helper ``strict_json::parse`` rejects repeated keys, but it is ``pub(crate)`` and
 ``verify_and_consume_permit`` still parses with ``serde_json::from_str`` (last key wins).
 Until the core exposes ``tempus_ddb.strict_loads``, this module is the local equivalent.
+
+TODO: drop the ``object_pairs_hook`` when that symbol exists.
+https://github.com/Julio-Patron/tempus-ddb/issues/86
 """
 
 from __future__ import annotations
@@ -55,4 +58,6 @@ def loads(payload: str | bytes | bytearray) -> Any:
             raise
         except ValueError as exc:
             raise json.JSONDecodeError(str(exc), "", 0) from exc
+    # TODO: remove this minimal object_pairs_hook when tempus_ddb.strict_loads is public.
+    # https://github.com/Julio-Patron/tempus-ddb/issues/86
     return json.loads(text, object_pairs_hook=_reject_duplicate_keys)
