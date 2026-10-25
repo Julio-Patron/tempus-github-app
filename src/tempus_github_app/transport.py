@@ -13,7 +13,6 @@ from urllib import error, parse, request
 
 from tempus_ddb.executor_runtime import AmbiguousTransportError
 
-from .strict_json import DUPLICATE_JSON_KEY
 from .strict_json import loads as loads_strict
 
 RESOURCE_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -162,9 +161,11 @@ class UrllibGitHubTransport:
                         raise AmbiguousTransportError("GITHUB_INVALID_RESPONSE_SHAPE")
                     return parsed
             except error.HTTPError as exc:
-                # Never echo arbitrary GitHub response text into audit receipts.
+                # Drain the body so the socket finishes, but do not classify the
+                # failure from its text. A 403 that merely says "rate limit" must
+                # not cause another write.
                 try:
-                    body = exc.read().decode("utf-8", errors="replace")
+                    exc.read()
                 except (OSError, HTTPException):
                     raise AmbiguousTransportError("GITHUB_RESPONSE_READ_AMBIGUOUS") from None
                 finally:
@@ -172,24 +173,10 @@ class UrllibGitHubTransport:
                 if exc.code >= 500:
                     raise AmbiguousTransportError(f"GITHUB_SERVER_RESPONSE_{exc.code}") from None
                 headers_lower = {key.lower(): value for key, value in (exc.headers or {}).items()}
-                try:
-                    document = loads_strict(body)
-                    message = document.get("message", "") if isinstance(document, dict) else ""
-                except json.JSONDecodeError as decode_error:
-                    # A repeated key must not be read as a rate-limit document.
-                    if DUPLICATE_JSON_KEY in decode_error.msg:
-                        raise GitHubAPIError(
-                            exc.code, f"GitHub rejected request (HTTP {exc.code})"
-                        ) from None
-                    message = body
-                except ValueError:
-                    message = body
-                message = message.lower() if isinstance(message, str) else ""
-                limited = exc.code == 429 or (exc.code == 403 and (
+                limited = exc.code in (403, 429) and (
                     "retry-after" in headers_lower
                     or headers_lower.get("x-ratelimit-remaining") == "0"
-                    or "rate limit" in message or "abuse" in message
-                ))
+                )
                 if not limited:
                     raise GitHubAPIError(exc.code, f"GitHub rejected request (HTTP {exc.code})") from None
                 if context is None or context.check_validity is None or retries >= context.max_retries:
@@ -211,7 +198,7 @@ class UrllibGitHubTransport:
                     f"GITHUB_TRANSPORT_AMBIGUOUS: {type(exc).__name__}"
                 ) from None
 
-    def _retry_delay(self, headers: dict[str, str], retries: int) -> float:
+    def _retry_delay(self, headers: dict[str, str], _retries: int) -> float:
         delays = []
         try:
             if "retry-after" in headers:
@@ -226,4 +213,5 @@ class UrllibGitHubTransport:
                 delays.append(max(0.0, reset - self._clock()) if math.isfinite(reset) else math.inf)
         except (ValueError, TypeError, KeyError, OverflowError):
             return math.inf  # An unreadable server deadline cannot safely be shortened.
-        return max(delays) if delays else 60.0 * (2 ** retries)
+        # No header deadline means we must not invent a backoff and write again.
+        return max(delays) if delays else math.inf
