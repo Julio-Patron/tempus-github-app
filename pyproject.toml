@@ -34,7 +34,9 @@ classifiers = [
     "Topic :: Security :: Cryptography",
 ]
 dependencies = [
-    "tempus-ddb>=0.5.2",
+    # Minimum stays on 0.5.3 until 0.5.4 exists. 0.5.3 has a payments bypass,
+    # so the floor becomes tempus-ddb>=0.5.4,<0.6 when that release is published.
+    "tempus-ddb>=0.5.3,<0.6",
     "cryptography>=42.0.0",
     "pyjwt>=2.8.0",
 ]
