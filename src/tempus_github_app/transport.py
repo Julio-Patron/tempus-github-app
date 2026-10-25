@@ -13,6 +13,9 @@ from urllib import error, parse, request
 
 from tempus_ddb.executor_runtime import AmbiguousTransportError
 
+from .strict_json import DUPLICATE_JSON_KEY
+from .strict_json import loads as loads_strict
+
 RESOURCE_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -154,7 +157,7 @@ class UrllibGitHubTransport:
             try:
                 with opener.open(github_request, timeout=min(30.0, remaining())) as response:
                     body = response.read().decode("utf-8")
-                    parsed = json.loads(body) if body else {}
+                    parsed = loads_strict(body) if body else {}
                     if not isinstance(parsed, (dict, list)):
                         raise AmbiguousTransportError("GITHUB_INVALID_RESPONSE_SHAPE")
                     return parsed
@@ -170,8 +173,15 @@ class UrllibGitHubTransport:
                     raise AmbiguousTransportError(f"GITHUB_SERVER_RESPONSE_{exc.code}") from None
                 headers_lower = {key.lower(): value for key, value in (exc.headers or {}).items()}
                 try:
-                    document = json.loads(body)
+                    document = loads_strict(body)
                     message = document.get("message", "") if isinstance(document, dict) else ""
+                except json.JSONDecodeError as decode_error:
+                    # A repeated key must not be read as a rate-limit document.
+                    if DUPLICATE_JSON_KEY in decode_error.msg:
+                        raise GitHubAPIError(
+                            exc.code, f"GitHub rejected request (HTTP {exc.code})"
+                        ) from None
+                    message = body
                 except ValueError:
                     message = body
                 message = message.lower() if isinstance(message, str) else ""

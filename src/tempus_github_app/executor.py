@@ -26,7 +26,7 @@ from .git_push import (
     parse_push_request,
     validate_branch_prefix,
 )
-from .permit_context import PermitBoundActionAdapter
+from .permit_context import PermitBoundActionAdapter, VerifiedPermitSource
 from .transport import (
     RESOURCE_PATTERN,
     GitHubAPIError,
@@ -421,6 +421,10 @@ class GitHubAppExecutorAdapter:
                     "gate_db is configured for revocation verification, but the underlying ExecutorRuntime does not support it"
                 )
         self._runtime = ExecutorRuntime(**runtime_kwargs)
+        # The runtime does not hand the verified authorization to the adapter.
+        # Wrapping the verifier captures that object without reimplementing consumption.
+        self._verified_permits = VerifiedPermitSource(self._runtime._executor)
+        self._runtime._executor = self._verified_permits
         self._gate_db = gate_db
 
     def execute(self, permit_json: str, *, bundle_path: str | Path | None = None) -> str:
@@ -431,7 +435,9 @@ class GitHubAppExecutorAdapter:
         artifacts = {"bundle": bundle_path} if bundle_path else None
         return self._runtime.execute_permit(
             permit_json,
-            PermitBoundActionAdapter(self._adapter, permit_json, self._gate_db, artifacts),
+            PermitBoundActionAdapter(
+                self._adapter, self._verified_permits, self._gate_db, artifacts
+            ),
         )
 
     execute_permit = execute

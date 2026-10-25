@@ -220,6 +220,34 @@ def test_zero_retries(network):
     assert opener.open.call_count == 1
 
 
+def test_duplicate_key_success_is_ambiguous(network):
+    transport, opener, response, _, sleeps = network
+    response.__enter__.return_value.read.return_value = b'{"id":1,"id":2}'
+    with pytest.raises(AmbiguousTransportError):
+        send(transport, PermitContext(2000, lambda: True))
+    assert opener.open.call_count == 1
+    assert not sleeps
+
+
+def test_duplicate_key_error_body_is_not_a_rate_limit(network):
+    transport, opener, _, _, sleeps = network
+    metadata = Message()
+    failure = HTTPError(
+        "https://api.github.com/test",
+        403,
+        "error",
+        metadata,
+        io.BytesIO(b'{"message":"ok","message":"rate limit"}'),
+    )
+    opener.open.side_effect = failure
+    with pytest.raises(GitHubAPIError) as caught:
+        send(transport, PermitContext(2000, lambda: True))
+    assert not isinstance(caught.value, GitHubRateLimitError)
+    assert caught.value.status_code == 403
+    assert opener.open.call_count == 1
+    assert not sleeps
+
+
 @pytest.mark.parametrize("body", [b"invalid JSON", b"42", b"null"])
 def test_malformed_success_is_ambiguous(network, body):
     transport, opener, response, _, sleeps = network

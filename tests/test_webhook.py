@@ -45,3 +45,19 @@ def test_webhook_handler_dispatch():
 
     with pytest.raises(WebhookVerificationError):
         handler.handle("issues", payload_bytes, "sha256=bad")
+
+
+def test_duplicate_json_key_is_rejected():
+    secret = "webhook-key"
+    handler = GitHubWebhookHandler(secret)
+    called = []
+
+    @handler.on("issues")
+    def handle_issue(event, payload):
+        called.append(payload)
+
+    payload_bytes = b'{"action":"opened","action":"closed","issue":{"title":"x","title":"y"}}'
+    mac = hmac.new(secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+    with pytest.raises(json.JSONDecodeError, match="DUPLICATE_JSON_KEY"):
+        handler.handle("issues", payload_bytes, f"sha256={mac}")
+    assert called == []
