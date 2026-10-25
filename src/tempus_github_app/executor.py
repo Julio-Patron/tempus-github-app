@@ -17,6 +17,7 @@ from tempus_ddb.executor_runtime import (
 )
 
 from .credentials import GitHubAppCredentials
+from .errors import BINDING_REJECTED, TRANSPORT_AMBIGUOUS, http_status, server_response
 from .git_push import (
     DEFAULT_BRANCH_PREFIX,
     PUSH_ACTION,
@@ -94,7 +95,7 @@ class GitHubAppActionAdapter(ActionAdapter):
             # Never leak credential details or stack trace
             return ExecutionResult(
                 status="FAILED",
-                payload={"error_code": "TEMPUS_GITHUB_CREDENTIAL_REJECTED"},
+                payload={"error_code": BINDING_REJECTED},
             )
 
         headers = {
@@ -128,19 +129,19 @@ class GitHubAppActionAdapter(ActionAdapter):
                 not isinstance(response, dict) or response.get("merged") is not True
             ):
                 return ExecutionResult(
-                    status="FAILED", payload={"error_code": "GITHUB_MERGE_NOT_CONFIRMED"}
+                    status="FAILED", payload={"error_code": BINDING_REJECTED}
                 )
             result = self._sanitize_result(response, action_type, resource)
             return ExecutionResult(status="SUCCEEDED", payload=result)
         except GitHubAPIError as exc:
             if exc.status_code >= 500:
                 raise AmbiguousTransportError(
-                    f"GITHUB_SERVER_RESPONSE_{exc.status_code}"
+                    server_response(exc.status_code)
                 ) from exc
             return ExecutionResult(
                 status="FAILED",
                 payload={
-                    "error_code": f"GITHUB_HTTP_{exc.status_code}",
+                    "error_code": http_status(exc.status_code),
                     "message": (
                         {405: "Pull request is not mergeable", 409: "Pull request HEAD SHA changed"}
                         .get(exc.status_code, f"GitHub request rejected (HTTP {exc.status_code})")
@@ -151,7 +152,7 @@ class GitHubAppActionAdapter(ActionAdapter):
             )
         except GitHubPermitError:
             return ExecutionResult(
-                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_PERMIT_INVALID"}
+                status="FAILED", payload={"error_code": BINDING_REJECTED}
             )
         except AmbiguousTransportError:
             # Custom transports must not leak response bodies or credentials in reasons.
@@ -181,7 +182,7 @@ class GitHubAppActionAdapter(ActionAdapter):
             raise GitHubExecutorError("github.push_branch requires the permit's bundle artifact")
         if not self._publisher.bundle_matches(bundle, request.bundle_sha256):
             return ExecutionResult(
-                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_BUNDLE_MISMATCH"}
+                status="FAILED", payload={"error_code": BINDING_REJECTED}
             )
 
         try:
@@ -190,7 +191,7 @@ class GitHubAppActionAdapter(ActionAdapter):
             # Never leak credential details or stack trace
             return ExecutionResult(
                 status="FAILED",
-                payload={"error_code": "TEMPUS_GITHUB_CREDENTIAL_REJECTED"},
+                payload={"error_code": BINDING_REJECTED},
             )
 
         try:
@@ -199,15 +200,15 @@ class GitHubAppActionAdapter(ActionAdapter):
             )
         except GitHubPermitError:
             return ExecutionResult(
-                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_PERMIT_INVALID"}
+                status="FAILED", payload={"error_code": BINDING_REJECTED}
             )
         except GitUnavailableError:
             return ExecutionResult(
-                status="FAILED", payload={"error_code": "TEMPUS_GITHUB_GIT_UNAVAILABLE"}
+                status="FAILED", payload={"error_code": BINDING_REJECTED}
             )
         except AmbiguousTransportError:
             # Git output may echo remote URLs; keep the reason fixed.
-            raise AmbiguousTransportError("GITHUB_PUSH_AMBIGUOUS") from None
+            raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS) from None
 
     def _bind_request(
         self, intent: dict[str, Any]

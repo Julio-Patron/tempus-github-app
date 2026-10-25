@@ -5,7 +5,7 @@ from contextlib import closing
 from unittest.mock import MagicMock
 
 import pytest
-from tempus_ddb.executor_runtime import UnknownExecutionError
+from tempus_ddb.executor_runtime import ExecutorRuntimeError, UnknownExecutionError
 
 from tempus_github_app.credentials import GitHubAppCredentials
 from tempus_github_app.executor import GitHubAppExecutorAdapter
@@ -120,7 +120,7 @@ def test_revocation_during_wait_produces_failed_receipt(execution, identity):
     transport._sleep = revoke_and_sleep
     outcome = json.loads(executor.execute(permit))
     assert outcome["status"] == "FAILED"
-    assert outcome["output"]["error_code"] == "TEMPUS_GITHUB_PERMIT_INVALID"
+    assert outcome["output"]["error_code"] == "TEMPUS_GITHUB_BINDING_REJECTED"
     assert opener.open.call_count == 1
 
 
@@ -260,7 +260,7 @@ def test_execute_uses_verified_authorization_object(execution, monkeypatch):
 def test_duplicate_authorization_is_rejected(execution):
     _, permit, executor, _, opener, _, _, auth = execution
     duplicate = with_duplicate_authorization(permit)
-    with pytest.raises(json.JSONDecodeError, match="DUPLICATE_JSON_KEY"):
+    with pytest.raises((json.JSONDecodeError, ExecutorRuntimeError), match="DUPLICATE_JSON_KEY"):
         executor.execute(duplicate)
     assert not auth.calls
     opener.open.assert_not_called()

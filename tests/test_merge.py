@@ -70,7 +70,7 @@ def test_merge_requires_literal_true(response):
     result = GitHubAppActionAdapter(Mock(token_for=lambda *args: "secret"),
                                     transport=transport).execute_action(intent())
     assert result.status == "FAILED"
-    assert result.payload == {"error_code": "GITHUB_MERGE_NOT_CONFIRMED"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     transport.request.assert_called_once()
 
 

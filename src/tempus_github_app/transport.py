@@ -13,6 +13,7 @@ from urllib import error, parse, request
 
 from tempus_ddb.executor_runtime import AmbiguousTransportError
 
+from .errors import TRANSPORT_AMBIGUOUS, server_response
 from .strict_json import loads as loads_strict
 
 RESOURCE_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -158,7 +159,7 @@ class UrllibGitHubTransport:
                     body = response.read().decode("utf-8")
                     parsed = loads_strict(body) if body else {}
                     if not isinstance(parsed, (dict, list)):
-                        raise AmbiguousTransportError("GITHUB_INVALID_RESPONSE_SHAPE")
+                        raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS)
                     return parsed
             except error.HTTPError as exc:
                 # Drain the body so the socket finishes, but do not classify the
@@ -167,11 +168,11 @@ class UrllibGitHubTransport:
                 try:
                     exc.read()
                 except (OSError, HTTPException):
-                    raise AmbiguousTransportError("GITHUB_RESPONSE_READ_AMBIGUOUS") from None
+                    raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS) from None
                 finally:
                     exc.close()
                 if exc.code >= 500:
-                    raise AmbiguousTransportError(f"GITHUB_SERVER_RESPONSE_{exc.code}") from None
+                    raise AmbiguousTransportError(server_response(exc.code)) from None
                 headers_lower = {key.lower(): value for key, value in (exc.headers or {}).items()}
                 limited = exc.code in (403, 429) and (
                     "retry-after" in headers_lower

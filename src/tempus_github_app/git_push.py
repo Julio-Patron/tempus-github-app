@@ -27,6 +27,7 @@ from urllib import parse
 
 from tempus_ddb.executor_runtime import AmbiguousTransportError, ExecutionResult
 
+from .errors import BINDING_REJECTED, TRANSPORT_AMBIGUOUS
 from .transport import (
     GitHubExecutorError,
     GitHubPermitError,
@@ -282,7 +283,7 @@ class BundlePublisher:
     ) -> ExecutionResult:
         repo = workspace / "repo.git"
         if self._git(["init", "--quiet", "--bare", str(repo)], cwd=workspace).returncode != 0:
-            return _failed("TEMPUS_GITHUB_WORKSPACE_FAILED")
+            return _failed(BINDING_REJECTED)
         basic = base64.b64encode(f"x-access-token:{token}".encode()).decode("ascii")
         auth = {f"http.{remote_url}.extraheader": f"AUTHORIZATION: basic {basic}"}
 
@@ -292,9 +293,9 @@ class BundlePublisher:
             cwd=repo, config=auth,
         )
         if fetched.returncode != 0:
-            return _failed("GITHUB_BASE_UNAVAILABLE")
+            return _failed(BINDING_REJECTED)
         if self._git(["bundle", "verify", "--quiet", str(bundle)], cwd=repo).returncode != 0:
-            return _failed("TEMPUS_GITHUB_BUNDLE_INVALID")
+            return _failed(BINDING_REJECTED)
         unbundled = self._git(["bundle", "unbundle", str(bundle)], cwd=repo)
         heads = {
             line.split(b" ", 1)[0].decode("ascii", "replace")
@@ -305,17 +306,17 @@ class BundlePublisher:
             or request.tip_sha not in heads
             or self._git(["cat-file", "-e", f"{request.tip_sha}^{{commit}}"], cwd=repo).returncode
         ):
-            return _failed("TEMPUS_GITHUB_BUNDLE_TIP_MISMATCH")
+            return _failed(BINDING_REJECTED)
         ancestry = self._git(
             ["merge-base", "--is-ancestor", request.base_sha, request.tip_sha], cwd=repo
         )
         if ancestry.returncode != 0:
-            return _failed("TEMPUS_GITHUB_NOT_FAST_FORWARD")
+            return _failed(BINDING_REJECTED)
         paths = self._changed_paths(repo, request.base_sha, request.tip_sha)
         if paths is None:
-            return _failed("TEMPUS_GITHUB_BUNDLE_INVALID")
+            return _failed(BINDING_REJECTED)
         if paths != request.paths:
-            return _failed("TEMPUS_GITHUB_PATHS_MISMATCH")
+            return _failed(BINDING_REJECTED)
 
         # The only write. The lease pins the remote branch to the signed state, and the
         # ancestry check above makes that update a fast-forward (or a branch creation).
@@ -329,19 +330,19 @@ class BundlePublisher:
                 cwd=repo, config=auth, timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            raise AmbiguousTransportError("GITHUB_PUSH_AMBIGUOUS") from None
+            raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS) from None
 
         status = self._porcelain_status(pushed.stdout, ref)
         if status is None:
             stderr = pushed.stderr.decode("utf-8", "replace").lower()
             if pushed.returncode != 0 and any(marker in stderr for marker in _NOT_SENT_MARKERS):
-                return _failed("GITHUB_PUSH_NOT_SENT")
-            raise AmbiguousTransportError("GITHUB_PUSH_AMBIGUOUS")
+                return _failed(BINDING_REJECTED)
+            raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS)
         flag, summary = status
         if flag == "!":
-            return _failed("GITHUB_PUSH_REJECTED", reason=summary[:200])
+            return _failed(BINDING_REJECTED, reason=summary[:200])
         if flag not in (" ", "*", "+", "="):
-            raise AmbiguousTransportError("GITHUB_PUSH_AMBIGUOUS")
+            raise AmbiguousTransportError(TRANSPORT_AMBIGUOUS)
         return ExecutionResult(status="SUCCEEDED", payload={
             "action_type": PUSH_ACTION,
             "resource": resource,

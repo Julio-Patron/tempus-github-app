@@ -1,0 +1,47 @@
+"""Outcome codes shared with tempus-ddb's GitHub adapter.
+
+``tempus_ddb.github_executor`` emits only these codes:
+
+- ``TEMPUS_GITHUB_BINDING_REJECTED`` — deterministic rejection; the effect did not happen
+- ``GITHUB_HTTP_<status>`` — GitHub returned a definitive 4xx
+- ``GITHUB_SERVER_RESPONSE_<status>`` — HTTP 5xx, outcome ambiguous
+- ``GITHUB_TRANSPORT_AMBIGUOUS`` — the effect cannot be classified
+
+``LEGACY_ERROR_CODES`` is the mapping from codes this app used to invent.
+Those strings are not emitted anymore.
+"""
+
+from __future__ import annotations
+
+BINDING_REJECTED = "TEMPUS_GITHUB_BINDING_REJECTED"
+TRANSPORT_AMBIGUOUS = "GITHUB_TRANSPORT_AMBIGUOUS"
+
+CORE_ERROR_CODES = frozenset({BINDING_REJECTED, TRANSPORT_AMBIGUOUS})
+
+
+def http_status(status_code: int) -> str:
+    return f"GITHUB_HTTP_{status_code}"
+
+
+def server_response(status_code: int) -> str:
+    return f"GITHUB_SERVER_RESPONSE_{status_code}"
+
+
+LEGACY_ERROR_CODES: dict[str, str] = {
+    "TEMPUS_GITHUB_CREDENTIAL_REJECTED": BINDING_REJECTED,
+    "TEMPUS_GITHUB_PERMIT_INVALID": BINDING_REJECTED,
+    "TEMPUS_GITHUB_BUNDLE_MISMATCH": BINDING_REJECTED,
+    "TEMPUS_GITHUB_GIT_UNAVAILABLE": BINDING_REJECTED,
+    "TEMPUS_GITHUB_WORKSPACE_FAILED": BINDING_REJECTED,
+    "TEMPUS_GITHUB_BUNDLE_INVALID": BINDING_REJECTED,
+    "TEMPUS_GITHUB_BUNDLE_TIP_MISMATCH": BINDING_REJECTED,
+    "TEMPUS_GITHUB_NOT_FAST_FORWARD": BINDING_REJECTED,
+    "TEMPUS_GITHUB_PATHS_MISMATCH": BINDING_REJECTED,
+    "GITHUB_MERGE_NOT_CONFIRMED": BINDING_REJECTED,
+    "GITHUB_BASE_UNAVAILABLE": BINDING_REJECTED,
+    "GITHUB_PUSH_NOT_SENT": BINDING_REJECTED,
+    "GITHUB_PUSH_REJECTED": BINDING_REJECTED,
+    "GITHUB_PUSH_AMBIGUOUS": TRANSPORT_AMBIGUOUS,
+    "GITHUB_INVALID_RESPONSE_SHAPE": TRANSPORT_AMBIGUOUS,
+    "GITHUB_RESPONSE_READ_AMBIGUOUS": TRANSPORT_AMBIGUOUS,
+}
