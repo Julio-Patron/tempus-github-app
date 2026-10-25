@@ -51,6 +51,7 @@ def create_webhook_app(
         request: Request,
         x_github_event: str | None = Header(None, alias="X-GitHub-Event"),
         x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
+        x_github_delivery: str | None = Header(None, alias="X-GitHub-Delivery"),
     ) -> Response:
         if not secret:
             raise HTTPException(
@@ -71,6 +72,10 @@ def create_webhook_app(
 
         # GitHub ping event sent during app webhook setup
         if event_name == "ping":
+            try:
+                event_handler.accept_delivery(x_github_delivery)
+            except WebhookVerificationError as exc:
+                raise HTTPException(status_code=401, detail=str(exc)) from exc
             return JSONResponse({"status": "pong", "zen": "Responsive to webhooks"})
 
         try:
@@ -78,6 +83,7 @@ def create_webhook_app(
                 event_name=event_name,
                 payload_bytes=payload_bytes,
                 signature_header=x_hub_signature_256,
+                delivery_id=x_github_delivery,
             )
             return JSONResponse(
                 {
