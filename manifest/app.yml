@@ -1,7 +1,7 @@
 # GitHub App Manifest for Tempus DDB GitHub App
 # See: https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest
 name: Tempus Security Gate
-url: https://github.com/elbuilder77/tempus-ddb
+url: https://github.com/Julio-Patron/tempus-github-app
 description: B2A (Bot-to-Agent) Zero-Trust Authorization Gate and Mediated Executor for GitHub
 public: false
 default_permissions:
