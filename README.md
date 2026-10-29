@@ -252,6 +252,36 @@ without `gate_db`; configuring active revocation with such a transport fails clo
 The bundled bridge supports the SQLite revocation schema used by `tempus-ddb`;
 it does not alter the installed runtime or its verification and signing logic.
 
+## Error codes
+
+Failed and ambiguous outcomes use the codes published by `tempus-ddb`'s GitHub
+adapter (`tempus_ddb.github_executor`): `TEMPUS_GITHUB_BINDING_REJECTED`,
+`GITHUB_HTTP_<status>`, `GITHUB_SERVER_RESPONSE_<status>`, and
+`GITHUB_TRANSPORT_AMBIGUOUS`. Codes this app used to invent are no longer
+emitted. Each one maps as follows (`src/tempus_github_app/errors.py`):
+
+| Former code | tempus-ddb code |
+| --- | --- |
+| `TEMPUS_GITHUB_CREDENTIAL_REJECTED` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_PERMIT_INVALID` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_BUNDLE_MISMATCH` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_GIT_UNAVAILABLE` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_WORKSPACE_FAILED` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_BUNDLE_INVALID` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_BUNDLE_TIP_MISMATCH` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_NOT_FAST_FORWARD` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `TEMPUS_GITHUB_PATHS_MISMATCH` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `GITHUB_MERGE_NOT_CONFIRMED` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `GITHUB_BASE_UNAVAILABLE` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `GITHUB_PUSH_NOT_SENT` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `GITHUB_PUSH_REJECTED` | `TEMPUS_GITHUB_BINDING_REJECTED` |
+| `GITHUB_PUSH_AMBIGUOUS` | `GITHUB_TRANSPORT_AMBIGUOUS` |
+| `GITHUB_INVALID_RESPONSE_SHAPE` | `GITHUB_TRANSPORT_AMBIGUOUS` |
+| `GITHUB_RESPONSE_READ_AMBIGUOUS` | `GITHUB_TRANSPORT_AMBIGUOUS` |
+
+A binding rejection means the effect did not happen. Transport and HTTP 5xx
+codes stay ambiguous and are not retried.
+
 ## 🧪 Testing
 
 Install test dependencies and run the test suite:

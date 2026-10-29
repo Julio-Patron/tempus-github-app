@@ -30,7 +30,7 @@ def test_auth_failure_does_not_write_or_leak_credentials(app_key):
         }
     )
     assert result.status == "FAILED"
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_CREDENTIAL_REJECTED"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     assert len(transport.calls) == 1
     assert transport.calls[0][1].endswith("/access_tokens")
 

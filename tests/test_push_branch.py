@@ -172,7 +172,7 @@ def test_new_branch_claim_rejected_when_branch_already_exists_elsewhere(repos):
         push_intent(push_input(repos, digest, ["a.txt"])), artifacts={"bundle": bundle}
     )
     assert result.status == "FAILED"
-    assert result.payload["error_code"] == "GITHUB_PUSH_REJECTED"
+    assert result.payload["error_code"] == "TEMPUS_GITHUB_BINDING_REJECTED"
     assert repos.remote_ref("agent/fix-123") == repos.base
 
 
@@ -190,7 +190,7 @@ def test_stale_base_is_rejected_by_lease(repos):
         artifacts={"bundle": bundle},
     )
     assert result.status == "FAILED"
-    assert result.payload["error_code"] == "GITHUB_PUSH_REJECTED"
+    assert result.payload["error_code"] == "TEMPUS_GITHUB_BINDING_REJECTED"
     assert "stale info" in result.payload["reason"]
     assert repos.remote_ref("agent/fix-123") == first
 
@@ -203,7 +203,7 @@ def test_bundle_digest_mismatch_fails_before_credentials(repos):
     result = adapter.execute_action(
         push_intent(push_input(repos, "0" * 64, ["a.txt"])), artifacts={"bundle": bundle}
     )
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_BUNDLE_MISMATCH"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     credentials.token_for.assert_not_called()
     assert repos.remote_ref("agent/fix-123") is None
 
@@ -218,7 +218,7 @@ def test_tip_not_in_bundle_is_rejected(repos):
     result = adapter.execute_action(
         push_intent(push_input(repos, digest, ["a.txt", "b.txt"])), artifacts={"bundle": bundle}
     )
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_BUNDLE_TIP_MISMATCH"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     assert repos.remote_ref("agent/fix-123") is None
 
 
@@ -231,7 +231,7 @@ def test_undeclared_path_is_rejected(repos):
     result = adapter.execute_action(
         push_intent(push_input(repos, digest, ["src/app.py"])), artifacts={"bundle": bundle}
     )
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_PATHS_MISMATCH"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     assert repos.remote_ref("agent/fix-123") is None
 
 
@@ -256,7 +256,7 @@ def test_paths_cover_renames_deletions_reverted_changes_and_merges(repos):
     result = adapter.execute_action(
         push_intent(push_input(repos, digest, missing_revert)), artifacts={"bundle": bundle}
     )
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_PATHS_MISMATCH"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
 
     result = adapter.execute_action(
         push_intent(push_input(repos, digest, expected)), artifacts={"bundle": bundle}
@@ -277,7 +277,7 @@ def test_tip_that_does_not_descend_from_base_is_rejected(repos):
     )
     # The orphan commit is not on the remote, so the base cannot even be fetched.
     assert result.status == "FAILED"
-    assert result.payload["error_code"] in {"GITHUB_BASE_UNAVAILABLE", "TEMPUS_GITHUB_NOT_FAST_FORWARD"}
+    assert result.payload["error_code"] == "TEMPUS_GITHUB_BINDING_REJECTED"
     assert repos.remote_ref("agent/fix-123") is None
 
 
@@ -339,7 +339,7 @@ def test_expired_or_revoked_permit_never_pushes(repos, context):
         push_intent(push_input(repos, digest, ["a.txt"])),
         context=context, artifacts={"bundle": bundle},
     )
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_PERMIT_INVALID"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     assert repos.remote_ref("agent/fix-123") is None
 
 
@@ -389,7 +389,7 @@ def test_push_timeout_is_unknown_not_retried(repos):
     runner = RecordingRunner(push_outcome=subprocess.TimeoutExpired(["git", "push"], 1))
     adapter, _ = make_adapter(repos, runner=runner)
     intent, artifacts = _ready_push(repos)
-    with pytest.raises(AmbiguousTransportError, match="GITHUB_PUSH_AMBIGUOUS"):
+    with pytest.raises(AmbiguousTransportError, match="GITHUB_TRANSPORT_AMBIGUOUS"):
         adapter.execute_action(intent, artifacts=artifacts)
     assert sum(args[0] == "push" for args, _ in runner.calls) == 1
 
@@ -412,7 +412,7 @@ def test_push_failure_before_upload_is_failed(repos, stderr):
     adapter, _ = make_adapter(repos, runner=RecordingRunner(push_outcome=outcome))
     intent, artifacts = _ready_push(repos)
     result = adapter.execute_action(intent, artifacts=artifacts)
-    assert result.payload == {"error_code": "GITHUB_PUSH_NOT_SENT"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
 
 
 def test_missing_git_binary_is_failed(repos):
@@ -423,7 +423,7 @@ def test_missing_git_binary_is_failed(repos):
                                      remote_url_for=lambda _: repos.remote.as_uri())
     intent, artifacts = _ready_push(repos)
     result = adapter.execute_action(intent, artifacts=artifacts)
-    assert result.payload == {"error_code": "TEMPUS_GITHUB_GIT_UNAVAILABLE"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
 
 
 def test_https_only_by_default(repos):
@@ -435,7 +435,7 @@ def test_https_only_by_default(repos):
     )
     intent, artifacts = _ready_push(repos)
     result = adapter.execute_action(intent, artifacts=artifacts)
-    assert result.payload == {"error_code": "GITHUB_BASE_UNAVAILABLE"}
+    assert result.payload == {"error_code": "TEMPUS_GITHUB_BINDING_REJECTED"}
     assert repos.remote_ref("agent/fix-123") is None
 
 
