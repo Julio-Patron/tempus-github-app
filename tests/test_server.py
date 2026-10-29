@@ -48,7 +48,11 @@ def test_webhook_ping_event(client: TestClient, test_secret: str):
     response = client.post(
         "/webhook",
         content=body,
-        headers={"X-GitHub-Event": "ping", "X-Hub-Signature-256": sig},
+        headers={
+            "X-GitHub-Event": "ping",
+            "X-Hub-Signature-256": sig,
+            "X-GitHub-Delivery": "ping-1",
+        },
     )
     assert response.status_code == 200
     assert response.json()["status"] == "pong"
@@ -62,7 +66,11 @@ def test_webhook_valid_signature_and_handler(client: TestClient, test_secret: st
     response = client.post(
         "/webhook",
         content=body,
-        headers={"X-GitHub-Event": "issues", "X-Hub-Signature-256": sig},
+        headers={
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": sig,
+            "X-GitHub-Delivery": "issues-1",
+        },
     )
     assert response.status_code == 200
     res = response.json()
@@ -133,8 +141,39 @@ def test_webhook_unhandled_error_returns_generic_500(test_secret: str):
     response = client.post(
         "/webhook",
         content=body,
-        headers={"X-GitHub-Event": "issues", "X-Hub-Signature-256": sig},
+        headers={
+            "X-GitHub-Event": "issues",
+            "X-Hub-Signature-256": sig,
+            "X-GitHub-Delivery": "issues-500",
+        },
     )
     assert response.status_code == 500
     assert response.json()["detail"] == "Error handling event"
     assert "Sensitive internal database error" not in response.text
+
+
+def test_duplicate_delivery_is_rejected(client: TestClient, test_secret: str):
+    body = b'{"action":"opened"}'
+    sig = _sign(test_secret, body)
+    headers = {
+        "X-GitHub-Event": "issues",
+        "X-Hub-Signature-256": sig,
+        "X-GitHub-Delivery": "same-delivery",
+    }
+    first = client.post("/webhook", content=body, headers=headers)
+    second = client.post("/webhook", content=body, headers=headers)
+    assert first.status_code == 200
+    assert second.status_code == 401
+    assert "Duplicate" in second.json()["detail"]
+
+
+def test_missing_delivery_header_is_rejected(client: TestClient, test_secret: str):
+    body = b'{"action":"opened"}'
+    sig = _sign(test_secret, body)
+    response = client.post(
+        "/webhook",
+        content=body,
+        headers={"X-GitHub-Event": "issues", "X-Hub-Signature-256": sig},
+    )
+    assert response.status_code == 401
+    assert "Missing" in response.json()["detail"]
