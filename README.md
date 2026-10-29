@@ -231,10 +231,12 @@ revocation, agent identity revocation, and an already committed outcome. Missing
 databases, incompatible schemas, locks, and failed checks stop execution. Without
 `gate_db`, requests receive a single attempt.
 
-The transport respects `Retry-After` and primary rate-limit reset times. A
-secondary limit without a wait header starts at 60 seconds, with exponential
-backoff, following [GitHub's retry guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api).
-It never shortens GitHub's wait to fit a permit. Expiry or revocation during a
+The transport retries a 403 or 429 only when GitHub sends `Retry-After` or
+`X-RateLimit-Remaining: 0` (waiting until `X-RateLimit-Reset` in that case).
+Response text is not a rate-limit signal. Without those headers the write is
+`FAILED` and is not retried, and a missing deadline is not replaced with a
+guessed backoff. It never shortens GitHub's wait to fit a permit. See
+[GitHub's retry guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api). Expiry or revocation during a
 wait prevents the next request. Socket timeouts are capped at 30 seconds and the
 remaining budget; less than one second remaining stops the attempt rather than
 rounding its timeout above the deadline. These are socket timeouts, not a guarantee

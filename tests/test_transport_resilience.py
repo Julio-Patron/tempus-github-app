@@ -104,20 +104,33 @@ def test_validity_query_failure(network):
     opener.open.assert_not_called()
 
 
-def test_secondary_default_and_backoff(network):
-    transport, opener, response, _, sleeps = network
-    opener.open.side_effect = [http_error(403, message="secondary rate limit"),
-                                http_error(403, message="secondary rate limit"), response]
-    assert send(transport, PermitContext(1500, lambda: True)) == {"id": 1}
-    assert sleeps == [60, 120]
-
-
-def test_secondary_default_exceeds_budget(network):
+@pytest.mark.parametrize("code,message", [
+    (403, "secondary rate limit"),
+    (403, "You have triggered an abuse detection mechanism"),
+    (429, "rate limited"),
+    (429, "You have exceeded a secondary rate limit"),
+])
+def test_body_text_without_rate_limit_headers_is_not_retried(network, code, message):
     transport, opener, _, _, sleeps = network
-    opener.open.side_effect = http_error(403, message="secondary rate limit")
-    with pytest.raises(GitHubRateLimitError):
-        send(transport, PermitContext(1030, lambda: True))
+    opener.open.side_effect = http_error(code, message=message)
+    with pytest.raises(GitHubAPIError) as caught:
+        send(transport, PermitContext(1500, lambda: True))
+    assert not isinstance(caught.value, GitHubRateLimitError)
+    assert caught.value.status_code == code
+    assert opener.open.call_count == 1
     assert not sleeps
+
+
+def test_remaining_zero_header_retries_without_reading_body(network):
+    transport, opener, response, _, sleeps = network
+    opener.open.side_effect = [
+        http_error(429, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1020"},
+                   message="not a rate limit"),
+        response,
+    ]
+    assert send(transport, PermitContext(1100, lambda: True)) == {"id": 1}
+    assert sleeps == [20]
+    assert opener.open.call_count == 2
 
 
 def test_permission_denied_never_retried(network):
