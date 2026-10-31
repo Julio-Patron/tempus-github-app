@@ -7,10 +7,10 @@
 **Short-lived installation tokens · Zero-leak credential boundary · Atomic single-use permit consumption · Cryptographic receipts**
 
 <p align="center">
-  <a href="https://github.com/elbuilder77/tempus-github-app/actions/workflows/ci.yml"><img src="https://github.com/elbuilder77/tempus-github-app/actions/workflows/ci.yml/badge.svg" alt="CI Build" /></a>
-  <a href="https://github.com/elbuilder77/tempus-ddb"><img src="https://img.shields.io/badge/ecosystem-tempus--ddb-blue.svg" alt="Tempus DDB Ecosystem" /></a>
+  <a href="https://github.com/Julio-Patron/tempus-github-app/actions/workflows/ci.yml"><img src="https://github.com/Julio-Patron/tempus-github-app/actions/workflows/ci.yml/badge.svg" alt="CI Build" /></a>
+  <a href="https://github.com/Julio-Patron/tempus-ddb"><img src="https://img.shields.io/badge/ecosystem-tempus--ddb-blue.svg" alt="Tempus DDB Ecosystem" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT" /></a>
-  <a href="https://elbuilder77.github.io/tempus-ddb/"><img src="https://img.shields.io/badge/docs-interactive%20trace-orange.svg" alt="Interactive Trace Docs" /></a>
+  <a href="https://julio-patron.github.io/tempus-ddb/"><img src="https://img.shields.io/badge/docs-interactive%20trace-orange.svg" alt="Interactive Trace Docs" /></a>
 </p>
 
 </div>
@@ -298,4 +298,4 @@ pytest tests/ -v
 * [MIT License](LICENSE)
 * [Changelog](CHANGELOG.md)
 
-Part of the [Tempus DDB](https://github.com/elbuilder77/tempus-ddb) ecosystem.
+Part of the [Tempus DDB](https://github.com/Julio-Patron/tempus-ddb) ecosystem.

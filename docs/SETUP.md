@@ -10,7 +10,7 @@ You can register the App manually or via the App Manifest (`manifest/app.yml`).
 
 1. Go to **GitHub Settings → Developer settings → GitHub Apps → New GitHub App**.
 2. **App Name**: Choose a unique name (e.g., `tempus-security-gate-acme`).
-3. **Homepage URL**: `https://github.com/elbuilder77/tempus-ddb` (or your organization's URL).
+3. **Homepage URL**: `https://github.com/Julio-Patron/tempus-ddb` (or your organization's URL).
 4. **Permissions**:
    - **Repository permissions**:
      - **Issues**: `Read and write`
